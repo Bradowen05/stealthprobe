@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       </p>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-3 gap-4 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <p className="text-sm text-zinc-500">Configurations</p>
           <p className="text-3xl font-bold mt-1">{configCount}</p>
