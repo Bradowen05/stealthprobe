@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -- Enums --
+
+// Represents the lifecycle of a test run
+enum TestRunStatus {
+  PENDING   // Created but not yet started
+  RUNNING   // Playwright is actively running tests
+  COMPLETED // All tests finished successfully
+  FAILED    // Something went wrong (browser crash, network error, etc.)
+}
+
+// -- Models --
+
+// A saved browser configuration that can be tested repeatedly
+model BrowserConfig {
+  id          String   @id @default(uuid())
+  name        String   // Human-readable name, e.g. "Stealth Advanced"
+  description String?  // Optional notes about what this config does
+  configJson  Json     // Full Playwright launch options (args, viewport, userAgent, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  testRuns TestRun[] // One config can have many test runs over time
+}
+
+// A single execution of a BrowserConfig against the detection test sites
+model TestRun {
+  id           String        @id @default(uuid())
+  configId     String
+  config       BrowserConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  status       TestRunStatus @default(PENDING)
+  stealthScore Float?        // Overall score 0-100, calculated after all tests complete
+  startedAt    DateTime      @default(now())
+  completedAt  DateTime?     // Null until the run finishes
+
+  results TestResult[] // Individual pass/fail results from each detection check
+}
+
+// A single pass/fail result from one specific detection check
+model TestResult {
+  id        String  @id @default(uuid())
+  testRunId String
+  testRun   TestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testSite  String  // Which site ran this check, e.g. "bot.sannysoft.com"
+  testName  String  // Specific check name, e.g. "WebDriver Detection"
+  passed    Boolean // true = undetected (good), false = detected (bad)
+  details   String? // Raw output or explanation of what was found
+  category  String  // Grouping: "fingerprint", "webdriver", "behavioural", "javascript"
+}

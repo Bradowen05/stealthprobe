@@ -1,65 +1,102 @@
-import Image from "next/image";
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
-export default function Home() {
+export default async function DashboardPage() {
+  // Fetch summary stats from the database
+  const [configCount, runCount, latestRuns] = await Promise.all([
+    prisma.browserConfig.count(),
+    prisma.testRun.count(),
+    prisma.testRun.findMany({
+      take: 5,
+      orderBy: { startedAt: "desc" },
+      include: { config: { select: { name: true } } },
+    }),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div>
+      <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+      <p className="text-zinc-400 mt-1">
+        Overview of your browser detection testing
+      </p>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-3 gap-4 mt-6">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <p className="text-sm text-zinc-500">Configurations</p>
+          <p className="text-3xl font-bold mt-1">{configCount}</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <p className="text-sm text-zinc-500">Total Test Runs</p>
+          <p className="text-3xl font-bold mt-1">{runCount}</p>
         </div>
-      </main>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <p className="text-sm text-zinc-500">Average Stealth Score</p>
+          <p className="text-3xl font-bold mt-1 text-zinc-600">--</p>
+        </div>
+      </div>
+
+      {/* Recent runs */}
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold">Recent Test Runs</h3>
+        {latestRuns.length === 0 ? (
+          <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+            <p className="text-zinc-500">No test runs yet.</p>
+            <Link
+              href="/configs"
+              className="inline-block mt-3 text-sm text-emerald-400 hover:text-emerald-300"
+            >
+              Create a configuration to get started
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-zinc-500">
+                  <th className="text-left p-3 font-medium">Config</th>
+                  <th className="text-left p-3 font-medium">Status</th>
+                  <th className="text-left p-3 font-medium">Score</th>
+                  <th className="text-left p-3 font-medium">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestRuns.map((run) => (
+                  <tr
+                    key={run.id}
+                    className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                  >
+                    <td className="p-3">{run.config.name}</td>
+                    <td className="p-3">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                          run.status === "COMPLETED"
+                            ? "bg-emerald-400/10 text-emerald-400"
+                            : run.status === "FAILED"
+                              ? "bg-red-400/10 text-red-400"
+                              : run.status === "RUNNING"
+                                ? "bg-yellow-400/10 text-yellow-400"
+                                : "bg-zinc-700 text-zinc-400"
+                        }`}
+                      >
+                        {run.status}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {run.stealthScore !== null
+                        ? `${run.stealthScore.toFixed(0)}%`
+                        : "--"}
+                    </td>
+                    <td className="p-3 text-zinc-500">
+                      {run.startedAt.toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
