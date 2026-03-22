@@ -10,7 +10,7 @@ const statusStyles: Record<TestRunStatus, string> = {
 };
 
 export default async function DashboardPage() {
-  const [configCount, runCount, latestRuns] = await Promise.all([
+  const [configCount, runCount, latestRuns, avgScore] = await Promise.all([
     prisma.browserConfig.count(),
     prisma.testRun.count(),
     prisma.testRun.findMany({
@@ -18,7 +18,13 @@ export default async function DashboardPage() {
       orderBy: { startedAt: "desc" },
       include: { config: { select: { name: true } } },
     }),
+    prisma.testRun.aggregate({
+      _avg: { stealthScore: true },
+      where: { status: TestRunStatus.COMPLETED, stealthScore: { not: null } },
+    }),
   ]);
+
+  const avgScoreValue = avgScore._avg.stealthScore;
 
   return (
     <div>
@@ -39,7 +45,19 @@ export default async function DashboardPage() {
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <p className="text-sm text-zinc-500">Average Stealth Score</p>
-          <p className="text-3xl font-bold mt-1 text-zinc-600">--</p>
+          <p
+            className={`text-3xl font-bold mt-1 ${
+              avgScoreValue === null
+                ? "text-zinc-600"
+                : avgScoreValue >= 80
+                  ? "text-emerald-400"
+                  : avgScoreValue >= 50
+                    ? "text-yellow-400"
+                    : "text-red-400"
+            }`}
+          >
+            {avgScoreValue !== null ? `${avgScoreValue.toFixed(0)}%` : "--"}
+          </p>
         </div>
       </div>
 
@@ -73,7 +91,14 @@ export default async function DashboardPage() {
                     key={run.id}
                     className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
                   >
-                    <td className="p-3">{run.config.name}</td>
+                    <td className="p-3">
+                      <Link
+                        href={`/runs/${run.id}`}
+                        className="hover:text-emerald-400"
+                      >
+                        {run.config.name}
+                      </Link>
+                    </td>
                     <td className="p-3">
                       <span
                         className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusStyles[run.status]}`}
