@@ -43,13 +43,13 @@ const configs = [
       ],
       viewport: { width: 1920, height: 1080 },
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
     },
   },
   {
     name: "Stealth Advanced",
     description:
-      "Everything in Basic plus navigator property spoofing, WebGL overrides, and plugin emulation.",
+      "Targeted stealth: only override webdriver flag (avoids worker thread inconsistencies from broad spoofing).",
     configJson: {
       headless: false,
       args: [
@@ -60,33 +60,15 @@ const configs = [
       ],
       viewport: { width: 1920, height: 1080 },
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
       initScripts: [
-        // Remove webdriver flag
+        // Remove webdriver flag — the single most important stealth override.
+        // We intentionally do NOT spoof languages, platform, or plugins because:
+        // 1. In headed mode, real Chrome already has correct values for these
+        // 2. Spoofing them causes mismatches with Web Worker/Service Worker
+        //    navigator properties, which sites like bot.incolumitas.com detect
+        // 3. Fake plugin arrays fail instanceof PluginArray checks
         "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });",
-        // Spoof languages
-        "Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });",
-        // Spoof platform
-        "Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });",
-        // Spoof plugins (Chrome normally has 5)
-        `Object.defineProperty(navigator, 'plugins', { get: () => {
-          const plugins = [
-            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-            { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
-          ];
-          plugins.length = 3;
-          return plugins;
-        }});`,
-        // Spoof WebGL vendor/renderer
-        `(() => {
-          const getParameter = WebGLRenderingContext.prototype.getParameter;
-          WebGLRenderingContext.prototype.getParameter = function(param) {
-            if (param === 37445) return 'Google Inc. (NVIDIA)';
-            if (param === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1080 Direct3D11 vs_5_0 ps_5_0)';
-            return getParameter.call(this, param);
-          };
-        })();`,
       ],
     },
   },
