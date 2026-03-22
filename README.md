@@ -9,6 +9,20 @@ A browser automation detection testing workbench. Define browser configurations 
 ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma)
 ![Tailwind](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwindcss)
 
+## Screenshots
+
+![Dashboard](screenshots/dashboard.png)
+*Dashboard with 5 configs tested — average stealth score 86%*
+
+![Comparison Chart](screenshots/comparison-chart.png)
+*Side-by-side category breakdown — Headless Playwright drops to 56% on fingerprint tests*
+
+![Comparison Table](screenshots/comparison-table.png)
+*Per-test PASS/FAIL matrix across 3 configurations*
+
+![Run Detail](screenshots/run-detail.png)
+*Individual run detail with Re-run and Export JSON buttons*
+
 ## What It Does
 
 StealthProbe answers the question: **"How detectable is my browser automation setup?"**
