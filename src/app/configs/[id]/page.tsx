@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { DeleteConfigButton } from "./delete-button";
+import { RunTestButton } from "./run-button";
 
 export default async function ConfigDetailPage({
   params,
@@ -42,6 +43,7 @@ export default async function ConfigDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
+          <RunTestButton configId={id} />
           <Link
             href={`/configs/${id}/edit`}
             className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
