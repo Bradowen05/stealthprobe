@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { executeTestRun } from "@/lib/runner";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(request: Request) {
   const body = await request.json();
   const { configId } = body;
 
-  if (!configId || typeof configId !== "string") {
+  if (!configId || typeof configId !== "string" || !UUID_REGEX.test(configId)) {
     return NextResponse.json(
-      { error: "configId is required" },
+      { error: "Invalid configId — must be a valid UUID" },
       { status: 400 }
     );
   }
@@ -19,10 +22,7 @@ export async function POST(request: Request) {
   });
 
   if (!config) {
-    return NextResponse.json(
-      { error: "Config not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Config not found" }, { status: 404 });
   }
 
   // Create a pending test run

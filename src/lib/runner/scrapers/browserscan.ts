@@ -112,7 +112,7 @@ export async function scrapeBrowserscan(
           testName,
           passed: result,
           details: result ? "Normal" : "Abnormal",
-          category: "javascript",
+          category: "webdriver",
         });
       }
     }

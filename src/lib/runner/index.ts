@@ -8,8 +8,8 @@ import type { PlaywrightConfig, DetectionResult } from "./types";
  * Execute a test run: launch browser with config, visit all detection sites,
  * scrape results, calculate score, and store everything in the database.
  *
- * Each detection site is visited sequentially in the same browser context
- * so the fingerprint stays consistent across all tests.
+ * Each detection site is visited in a fresh page within the same browser
+ * context so the fingerprint stays consistent across all tests.
  */
 export async function executeTestRun(testRunId: string): Promise<void> {
   // Mark run as RUNNING
@@ -22,44 +22,43 @@ export async function executeTestRun(testRunId: string): Promise<void> {
   const config = testRun.config.configJson as PlaywrightConfig;
   const allResults: DetectionResult[] = [];
 
+  let browser;
+  let context;
+
   try {
-    const { browser, context } = await launchBrowser(config);
+    const launched = await launchBrowser(config);
+    browser = launched.browser;
+    context = launched.context;
 
-    try {
+    // Run each scraper with a fresh page to prevent handler bleed
+    for (const scraper of scrapers) {
       const page = await context.newPage();
-
-      // Run each scraper sequentially
-      for (const scraper of scrapers) {
-        try {
-          console.log(`[TestRun ${testRunId}] Scraping ${scraper.name}...`);
-          const siteResults = await scraper.scrape(page);
-          allResults.push(...siteResults);
-          console.log(
-            `[TestRun ${testRunId}] ${scraper.name}: ${siteResults.length} results`
-          );
-        } catch (error) {
-          // If one site fails, record the error but continue to the next
-          console.error(
-            `[TestRun ${testRunId}] ${scraper.name} failed:`,
-            error
-          );
-          allResults.push({
-            testSite: scraper.name,
-            testName: "Scraper Error",
-            passed: false,
-            details:
-              error instanceof Error
-                ? error.message
-                : "Unknown error occurred",
-            category: "connectivity",
-          });
-        }
+      try {
+        console.log(`[TestRun ${testRunId}] Scraping ${scraper.name}...`);
+        const siteResults = await scraper.scrape(page);
+        allResults.push(...siteResults);
+        console.log(
+          `[TestRun ${testRunId}] ${scraper.name}: ${siteResults.length} results`
+        );
+      } catch (error) {
+        // If one site fails, record the error but continue to the next
+        console.error(
+          `[TestRun ${testRunId}] ${scraper.name} failed:`,
+          error
+        );
+        allResults.push({
+          testSite: scraper.name,
+          testName: "Scraper Error",
+          passed: false,
+          details:
+            error instanceof Error
+              ? error.message.substring(0, 500)
+              : "Unknown error occurred",
+          category: "connectivity",
+        });
+      } finally {
+        await page.close().catch(() => {});
       }
-
-      await page.close();
-    } finally {
-      await context.close();
-      await browser.close();
     }
 
     // Store all results in the database
@@ -73,14 +72,30 @@ export async function executeTestRun(testRunId: string): Promise<void> {
     // Exclude "connectivity" category errors from score calculation
     const scoreable = allResults.filter((r) => r.category !== "connectivity");
     const passed = scoreable.filter((r) => r.passed).length;
-    const score =
-      scoreable.length > 0 ? (passed / scoreable.length) * 100 : 0;
+
+    // If all results are connectivity errors, mark as FAILED
+    if (scoreable.length === 0) {
+      await prisma.testRun.update({
+        where: { id: testRunId },
+        data: {
+          status: TestRunStatus.FAILED,
+          stealthScore: null,
+          completedAt: new Date(),
+        },
+      });
+      console.log(
+        `[TestRun ${testRunId}] Failed — all scrapers returned connectivity errors`
+      );
+      return;
+    }
+
+    const score = (passed / scoreable.length) * 100;
 
     await prisma.testRun.update({
       where: { id: testRunId },
       data: {
         status: TestRunStatus.COMPLETED,
-        stealthScore: Math.round(score * 10) / 10, // 1 decimal place
+        stealthScore: Math.round(score * 10) / 10,
         completedAt: new Date(),
       },
     });
@@ -90,26 +105,36 @@ export async function executeTestRun(testRunId: string): Promise<void> {
     );
   } catch (error) {
     // Fatal error — browser couldn't launch or something went very wrong
-    await prisma.testRun.update({
-      where: { id: testRunId },
-      data: {
-        status: TestRunStatus.FAILED,
-        completedAt: new Date(),
-      },
-    });
+    await prisma.testRun
+      .update({
+        where: { id: testRunId },
+        data: {
+          status: TestRunStatus.FAILED,
+          completedAt: new Date(),
+        },
+      })
+      .catch(() => {});
 
-    await prisma.testResult.create({
-      data: {
-        testRunId,
-        testSite: "internal",
-        testName: "Runner Error",
-        passed: false,
-        details:
-          error instanceof Error ? error.message : "Unknown error occurred",
-        category: "connectivity",
-      },
-    });
+    await prisma.testResult
+      .create({
+        data: {
+          testRunId,
+          testSite: "internal",
+          testName: "Runner Error",
+          passed: false,
+          details:
+            error instanceof Error
+              ? error.message.substring(0, 500)
+              : "Unknown error occurred",
+          category: "connectivity",
+        },
+      })
+      .catch(() => {});
 
     console.error(`[TestRun ${testRunId}] Fatal error:`, error);
+  } finally {
+    // Always close browser — prevents Chromium process leaks
+    await context?.close().catch(() => {});
+    await browser?.close().catch(() => {});
   }
 }
