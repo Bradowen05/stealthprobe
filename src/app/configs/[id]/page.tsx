@@ -45,6 +45,12 @@ export default async function ConfigDetailPage({
         <div className="flex gap-2">
           <RunTestButton configId={id} />
           <Link
+            href={`/configs/${id}/history`}
+            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+          >
+            History
+          </Link>
+          <Link
             href={`/configs/${id}/edit`}
             className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
           >

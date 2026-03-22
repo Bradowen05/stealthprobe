@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { TestRunStatus } from "@/generated/prisma/enums";
 import { PollStatus } from "./poll-status";
+import { ReRunButton, ExportButton } from "./run-actions";
 
 const statusStyles: Record<TestRunStatus, string> = {
   [TestRunStatus.COMPLETED]: "bg-emerald-400/10 text-emerald-400",
@@ -70,12 +71,16 @@ export default async function RunDetailPage({
             </span>
           </div>
         </div>
-        <Link
-          href={`/configs/${run.config.id}`}
-          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
-        >
-          View Config
-        </Link>
+        <div className="flex gap-2">
+          <ReRunButton configId={run.config.id} />
+          <ExportButton runId={run.id} />
+          <Link
+            href={`/configs/${run.config.id}`}
+            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+          >
+            View Config
+          </Link>
+        </div>
       </div>
 
       {(run.status === TestRunStatus.PENDING ||
