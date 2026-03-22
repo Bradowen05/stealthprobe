@@ -1,14 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { TestRunStatus } from "@/generated/prisma/enums";
 import { launchBrowser } from "./browser";
+import { scrapers } from "./scrapers";
 import type { PlaywrightConfig, DetectionResult } from "./types";
 
 /**
- * Execute a test run: launch browser with config, visit detection sites,
+ * Execute a test run: launch browser with config, visit all detection sites,
  * scrape results, calculate score, and store everything in the database.
  *
- * This is the core orchestrator — individual site scrapers will be added
- * in Phase 3 after we research each site's DOM structure.
+ * Each detection site is visited sequentially in the same browser context
+ * so the fingerprint stays consistent across all tests.
  */
 export async function executeTestRun(testRunId: string): Promise<void> {
   // Mark run as RUNNING
@@ -19,24 +20,41 @@ export async function executeTestRun(testRunId: string): Promise<void> {
   });
 
   const config = testRun.config.configJson as PlaywrightConfig;
-  let results: DetectionResult[] = [];
+  const allResults: DetectionResult[] = [];
 
   try {
     const { browser, context } = await launchBrowser(config);
 
     try {
-      // Phase 3 will add site-specific scrapers here.
-      // For now, run a basic connectivity test to verify the runner works.
       const page = await context.newPage();
-      await page.goto("about:blank");
 
-      results.push({
-        testSite: "internal",
-        testName: "Browser Launch",
-        passed: true,
-        details: `Browser launched successfully. Headless: ${config.headless ?? false}`,
-        category: "connectivity",
-      });
+      // Run each scraper sequentially
+      for (const scraper of scrapers) {
+        try {
+          console.log(`[TestRun ${testRunId}] Scraping ${scraper.name}...`);
+          const siteResults = await scraper.scrape(page);
+          allResults.push(...siteResults);
+          console.log(
+            `[TestRun ${testRunId}] ${scraper.name}: ${siteResults.length} results`
+          );
+        } catch (error) {
+          // If one site fails, record the error but continue to the next
+          console.error(
+            `[TestRun ${testRunId}] ${scraper.name} failed:`,
+            error
+          );
+          allResults.push({
+            testSite: scraper.name,
+            testName: "Scraper Error",
+            passed: false,
+            details:
+              error instanceof Error
+                ? error.message
+                : "Unknown error occurred",
+            category: "connectivity",
+          });
+        }
+      }
 
       await page.close();
     } finally {
@@ -44,27 +62,34 @@ export async function executeTestRun(testRunId: string): Promise<void> {
       await browser.close();
     }
 
-    // Store results
-    if (results.length > 0) {
+    // Store all results in the database
+    if (allResults.length > 0) {
       await prisma.testResult.createMany({
-        data: results.map((r) => ({ ...r, testRunId })),
+        data: allResults.map((r) => ({ ...r, testRunId })),
       });
     }
 
-    // Calculate stealth score (passed / total * 100)
-    const passed = results.filter((r) => r.passed).length;
-    const score = results.length > 0 ? (passed / results.length) * 100 : 0;
+    // Calculate stealth score: (passed / total) * 100
+    // Exclude "connectivity" category errors from score calculation
+    const scoreable = allResults.filter((r) => r.category !== "connectivity");
+    const passed = scoreable.filter((r) => r.passed).length;
+    const score =
+      scoreable.length > 0 ? (passed / scoreable.length) * 100 : 0;
 
     await prisma.testRun.update({
       where: { id: testRunId },
       data: {
         status: TestRunStatus.COMPLETED,
-        stealthScore: score,
+        stealthScore: Math.round(score * 10) / 10, // 1 decimal place
         completedAt: new Date(),
       },
     });
+
+    console.log(
+      `[TestRun ${testRunId}] Complete. Score: ${score.toFixed(1)}% (${passed}/${scoreable.length} passed)`
+    );
   } catch (error) {
-    // Mark as failed and store the error
+    // Fatal error — browser couldn't launch or something went very wrong
     await prisma.testRun.update({
       where: { id: testRunId },
       data: {
@@ -73,7 +98,6 @@ export async function executeTestRun(testRunId: string): Promise<void> {
       },
     });
 
-    // Store error as a failed result
     await prisma.testResult.create({
       data: {
         testRunId,
@@ -85,5 +109,7 @@ export async function executeTestRun(testRunId: string): Promise<void> {
         category: "connectivity",
       },
     });
+
+    console.error(`[TestRun ${testRunId}] Fatal error:`, error);
   }
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { TestRunStatus } from "@/generated/prisma/enums";
+import { PollStatus } from "./poll-status";
 
 const statusStyles: Record<TestRunStatus, string> = {
   [TestRunStatus.COMPLETED]: "bg-emerald-400/10 text-emerald-400",
@@ -76,6 +77,11 @@ export default async function RunDetailPage({
           View Config
         </Link>
       </div>
+
+      {(run.status === TestRunStatus.PENDING ||
+        run.status === TestRunStatus.RUNNING) && (
+        <PollStatus runId={run.id} />
+      )}
 
       {run.results.length === 0 ? (
         <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
