@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function DiffPage({
   params,
   searchParams,
@@ -12,20 +15,20 @@ export default async function DiffPage({
   const { id } = await params;
   const { against } = await searchParams;
 
-  if (!against) notFound();
+  if (!against || !UUID_REGEX.test(id) || !UUID_REGEX.test(against)) notFound();
 
   const [runA, runB] = await Promise.all([
     prisma.testRun.findUnique({
       where: { id },
       include: {
-        config: { select: { name: true } },
+        config: { select: { name: true, id: true } },
         results: { orderBy: { testName: "asc" } },
       },
     }),
     prisma.testRun.findUnique({
       where: { id: against },
       include: {
-        config: { select: { name: true } },
+        config: { select: { name: true, id: true } },
         results: { orderBy: { testName: "asc" } },
       },
     }),
@@ -33,14 +36,14 @@ export default async function DiffPage({
 
   if (!runA || !runB) notFound();
 
-  // Build lookups
+  // Ensure both runs are from the same config
+  if (runA.config.id !== runB.config.id) notFound();
+
+  // runA = current (newer), runB = against (older)
   const lookupA = new Map(runA.results.map((r) => [r.testName, r]));
   const lookupB = new Map(runB.results.map((r) => [r.testName, r]));
-
-  // Collect all test names
   const allTests = new Set([...lookupA.keys(), ...lookupB.keys()]);
 
-  // Categorise changes
   const improved: string[] = [];
   const regressed: string[] = [];
   const unchanged: string[] = [];
@@ -48,18 +51,18 @@ export default async function DiffPage({
   const removedTests: string[] = [];
 
   for (const test of allTests) {
-    const a = lookupA.get(test);
-    const b = lookupB.get(test);
+    const a = lookupA.get(test); // current run
+    const b = lookupB.get(test); // older run
 
-    if (!b) {
+    if (a && !b) {
       newTests.push(test);
-    } else if (!a) {
+    } else if (!a && b) {
       removedTests.push(test);
-    } else if (!a.passed && b.passed) {
-      // Was failing in older run, passing in newer = improved
-      // runB is the "against" (older), runA is the current
+    } else if (a && b && a.passed && !b.passed) {
+      // Current passes, old failed → improved
       improved.push(test);
-    } else if (a.passed && !b.passed) {
+    } else if (a && b && !a.passed && b.passed) {
+      // Current fails, old passed → regressed
       regressed.push(test);
     } else {
       unchanged.push(test);

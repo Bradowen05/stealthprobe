@@ -20,7 +20,7 @@ export function ReRunButton({ configId }: { configId: string }) {
         router.push(`/runs/${data.testRunId}`);
       }
     } catch {
-      // Ignore
+      alert("Failed to start test run");
     } finally {
       setIsRunning(false);
     }
