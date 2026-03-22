@@ -42,6 +42,9 @@ model TestRun {
   completedAt  DateTime?     // Null until the run finishes
 
   results TestResult[] // Individual pass/fail results from each detection check
+
+  @@index([configId])
+  @@index([startedAt])
 }
 
 // A single pass/fail result from one specific detection check
@@ -54,4 +57,7 @@ model TestResult {
   passed    Boolean // true = undetected (good), false = detected (bad)
   details   String? // Raw output or explanation of what was found
   category  String  // Grouping: "fingerprint", "webdriver", "behavioural", "javascript"
+
+  @@index([testRunId])
+  @@index([testRunId, category])
 }

@@ -1,13 +1,18 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-// Singleton pattern: reuse the same PrismaClient instance across hot reloads in development.
-// Without this, Next.js would create a new database connection on every hot reload,
-// eventually exhausting your connection pool (Neon free tier allows ~20 connections).
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL environment variable is not set. Check your .env file."
+  );
+}
 
 function createPrismaClient() {
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL!,
+    max: 10,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 5000,
   });
   return new PrismaClient({ adapter });
 }

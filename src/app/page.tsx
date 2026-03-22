@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { TestRunStatus } from "@/generated/prisma/enums";
+
+const statusStyles: Record<TestRunStatus, string> = {
+  [TestRunStatus.COMPLETED]: "bg-emerald-400/10 text-emerald-400",
+  [TestRunStatus.FAILED]: "bg-red-400/10 text-red-400",
+  [TestRunStatus.RUNNING]: "bg-yellow-400/10 text-yellow-400",
+  [TestRunStatus.PENDING]: "bg-zinc-700 text-zinc-400",
+};
 
 export default async function DashboardPage() {
-  // Fetch summary stats from the database
   const [configCount, runCount, latestRuns] = await Promise.all([
     prisma.browserConfig.count(),
     prisma.testRun.count(),
@@ -69,15 +76,7 @@ export default async function DashboardPage() {
                     <td className="p-3">{run.config.name}</td>
                     <td className="p-3">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                          run.status === "COMPLETED"
-                            ? "bg-emerald-400/10 text-emerald-400"
-                            : run.status === "FAILED"
-                              ? "bg-red-400/10 text-red-400"
-                              : run.status === "RUNNING"
-                                ? "bg-yellow-400/10 text-yellow-400"
-                                : "bg-zinc-700 text-zinc-400"
-                        }`}
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusStyles[run.status]}`}
                       >
                         {run.status}
                       </span>
@@ -88,7 +87,9 @@ export default async function DashboardPage() {
                         : "--"}
                     </td>
                     <td className="p-3 text-zinc-500">
-                      {run.startedAt.toLocaleDateString()}
+                      {run.startedAt.toLocaleDateString("en-GB", {
+                        dateStyle: "medium",
+                      })}
                     </td>
                   </tr>
                 ))}
